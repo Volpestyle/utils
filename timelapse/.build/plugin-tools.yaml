@@ -1,0 +1,66 @@
+client:
+  name: basic
+  file-system: device-agnostic
+tools: {}
+targets:
+  "PackageStructure": ["<PackageStructure>"]
+  "main": ["<video-stitch-swift-arm64-apple-macosx26.0-release.exe>","<video-stitch-swift-arm64-apple-macosx26.0-release.module>"]
+  "test": ["<video-stitch-swift-arm64-apple-macosx26.0-release.exe>","<video-stitch-swift-arm64-apple-macosx26.0-release.module>"]
+  "video-stitch-swift-arm64-apple-macosx26.0-release.exe": ["<video-stitch-swift-arm64-apple-macosx26.0-release.exe>"]
+  "video-stitch-swift-arm64-apple-macosx26.0-release.module": ["<video-stitch-swift-arm64-apple-macosx26.0-release.module>"]
+default: "main"
+nodes:
+  "/Users/jamesvolpe/web/utils/timelapse/Sources/video-stitch-swift/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+commands:
+  "/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/swift-version--58304C5D6DBC2206.txt":
+    tool: write-auxiliary-file
+    inputs: ["<swift-get-version>","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"]
+    outputs: ["/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/swift-version--58304C5D6DBC2206.txt"]
+    always-out-of-date: "true"
+    description: "Write auxiliary file /Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/swift-version--58304C5D6DBC2206.txt"
+
+  "/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video-stitch-swift.product/Objects.LinkFileList":
+    tool: write-auxiliary-file
+    inputs: ["<link-file-list>","/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video_stitch_swift.build/main.swift.o"]
+    outputs: ["/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video-stitch-swift.product/Objects.LinkFileList"]
+    description: "Write auxiliary file /Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video-stitch-swift.product/Objects.LinkFileList"
+
+  "/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video_stitch_swift.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/jamesvolpe/web/utils/timelapse/Sources/video-stitch-swift/main.swift"]
+    outputs: ["/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video_stitch_swift.build/sources"]
+    description: "Write auxiliary file /Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video_stitch_swift.build/sources"
+
+  "<video-stitch-swift-arm64-apple-macosx26.0-release.exe>":
+    tool: phony
+    inputs: ["/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video-stitch-swift"]
+    outputs: ["<video-stitch-swift-arm64-apple-macosx26.0-release.exe>"]
+
+  "<video-stitch-swift-arm64-apple-macosx26.0-release.module>":
+    tool: phony
+    inputs: ["/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video_stitch_swift.build/main.swift.o","/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/Modules/video_stitch_swift.swiftmodule"]
+    outputs: ["<video-stitch-swift-arm64-apple-macosx26.0-release.module>"]
+
+  "C.video-stitch-swift-arm64-apple-macosx26.0-release.exe":
+    tool: shell
+    inputs: ["/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video_stitch_swift.build/main.swift.o","/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video-stitch-swift.product/Objects.LinkFileList"]
+    outputs: ["/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video-stitch-swift"]
+    description: "Linking ./.build/arm64-apple-macosx/release/video-stitch-swift"
+    args: ["/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc","-L","/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release","-o","/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video-stitch-swift","-module-name","video_stitch_swift","-Xlinker","-no_warn_duplicate_libraries","-emit-executable","-Xlinker","-dead_strip","-Xlinker","-alias","-Xlinker","_video_stitch_swift_main","-Xlinker","_main","-Xlinker","-rpath","-Xlinker","@loader_path","@/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video-stitch-swift.product/Objects.LinkFileList","-target","arm64-apple-macosx13.0","-plugin-path","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing","-sdk","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-I","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-L","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-g"]
+
+  "C.video-stitch-swift-arm64-apple-macosx26.0-release.module":
+    tool: shell
+    inputs: ["/Users/jamesvolpe/web/utils/timelapse/Sources/video-stitch-swift/main.swift","/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/swift-version--58304C5D6DBC2206.txt","/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video_stitch_swift.build/sources"]
+    outputs: ["/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video_stitch_swift.build/main.swift.o","/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/Modules/video_stitch_swift.swiftmodule"]
+    description: "Compiling Swift Module 'video_stitch_swift' (1 sources)"
+    args: ["/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc","-module-name","video_stitch_swift","-emit-dependencies","-emit-module","-emit-module-path","/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/Modules/video_stitch_swift.swiftmodule","-output-file-map","/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video_stitch_swift.build/output-file-map.json","-whole-module-optimization","-num-threads","10","-c","@/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/video_stitch_swift.build/sources","-I","/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/Modules","-target","arm64-apple-macosx13.0","-whole-module-optimization","-num-threads","10","-serialize-diagnostics","-O","-j10","-DSWIFT_PACKAGE","-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE","-module-cache-path","/Users/jamesvolpe/web/utils/timelapse/.build/arm64-apple-macosx/release/ModuleCache","-parseable-output","-Xfrontend","-entry-point-function-name","-Xfrontend","video_stitch_swift_main","-parse-as-library","-swift-version","5","-plugin-path","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing","-sdk","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-I","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-L","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-g","-Xcc","-isysroot","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk","-Xcc","-F","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-Xcc","-F","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-Xcc","-fPIC","-Xcc","-g","-package-name","timelapse"]
+
+  "PackageStructure":
+    tool: package-structure-tool
+    inputs: ["/Users/jamesvolpe/web/utils/timelapse/Sources/video-stitch-swift/","/Users/jamesvolpe/web/utils/timelapse/Package.swift","/Users/jamesvolpe/web/utils/timelapse/Package.resolved"]
+    outputs: ["<PackageStructure>"]
+    description: "Planning build"
+    allow-missing-inputs: true
+

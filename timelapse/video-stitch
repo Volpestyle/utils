@@ -1,0 +1,339 @@
+#!/bin/bash
+
+# video-stitch: Speeds up and concatenates videos from a folder
+# Requires: ffmpeg (install via `brew install ffmpeg`)
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Default values
+SPEED_FACTOR=1.0
+OUTPUT_FILE=""
+SORT_BY="time"  # time or name
+VERBOSE=false
+KEEP_TEMP=false
+VIDEO_EXTENSIONS="mp4|mov|avi|mkv|webm|m4v|MP4|MOV|AVI|MKV|WEBM|M4V"
+
+usage() {
+    cat << EOF
+${BLUE}video-stitch${NC} - Speed up and concatenate videos from a folder
+
+${YELLOW}USAGE:${NC}
+    video-stitch [OPTIONS] <input_folder>
+
+${YELLOW}OPTIONS:${NC}
+    -s, --speed <factor>    Speed multiplier (default: 1.0)
+                            Examples: 2.0 = 2x faster, 0.5 = half speed
+    -o, --output <file>     Output filename (default: output_<timestamp>.mp4)
+    -n, --sort-name         Sort videos by filename instead of modification time
+    -v, --verbose           Show detailed ffmpeg output
+    -k, --keep-temp         Keep temporary files after processing
+    -h, --help              Show this help message
+
+${YELLOW}EXAMPLES:${NC}
+    video-stitch ~/Videos                      # Stitch at normal speed
+    video-stitch -s 2.0 ~/Videos               # Speed up 2x
+    video-stitch -s 1.5 -o final.mp4 ~/Videos  # 1.5x speed, custom output
+    video-stitch -n ~/Videos                   # Sort by filename
+
+${YELLOW}SUPPORTED FORMATS:${NC}
+    mp4, mov, avi, mkv, webm, m4v
+
+EOF
+    exit 0
+}
+
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+    exit 1
+}
+
+# Check dependencies
+check_dependencies() {
+    if ! command -v ffmpeg &> /dev/null; then
+        log_error "ffmpeg is not installed. Install it with: brew install ffmpeg"
+    fi
+    if ! command -v ffprobe &> /dev/null; then
+        log_error "ffprobe is not installed. Install it with: brew install ffmpeg"
+    fi
+}
+
+# Parse arguments
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -s|--speed)
+                SPEED_FACTOR="$2"
+                shift 2
+                ;;
+            -o|--output)
+                OUTPUT_FILE="$2"
+                shift 2
+                ;;
+            -n|--sort-name)
+                SORT_BY="name"
+                shift
+                ;;
+            -v|--verbose)
+                VERBOSE=true
+                shift
+                ;;
+            -k|--keep-temp)
+                KEEP_TEMP=true
+                shift
+                ;;
+            -h|--help)
+                usage
+                ;;
+            -*)
+                log_error "Unknown option: $1"
+                ;;
+            *)
+                INPUT_FOLDER="$1"
+                shift
+                ;;
+        esac
+    done
+
+    if [[ -z "$INPUT_FOLDER" ]]; then
+        log_error "No input folder specified. Use -h for help."
+    fi
+
+    if [[ ! -d "$INPUT_FOLDER" ]]; then
+        log_error "Input folder does not exist: $INPUT_FOLDER"
+    fi
+
+    # Validate speed factor
+    if ! [[ "$SPEED_FACTOR" =~ ^[0-9]+\.?[0-9]*$ ]] || (( $(echo "$SPEED_FACTOR <= 0" | bc -l) )); then
+        log_error "Speed factor must be a positive number"
+    fi
+
+    # Set default output filename if not specified
+    if [[ -z "$OUTPUT_FILE" ]]; then
+        OUTPUT_FILE="output_$(date +%Y%m%d_%H%M%S).mp4"
+    fi
+}
+
+# Find and sort video files
+find_videos() {
+    local folder="$1"
+    local videos=()
+    local temp_file
+
+    # Note: Don't use log_info here - stdout is captured for file list
+    echo -e "${BLUE}[INFO]${NC} Scanning folder for videos: $folder" >&2
+
+    if [[ "$SORT_BY" == "name" ]]; then
+        # Sort by filename (exclude macOS metadata files)
+        while IFS= read -r file; do
+            [[ -n "$file" ]] && videos+=("$file")
+        done < <(find "$folder" -maxdepth 1 -type f \
+            ! -name "._*" ! -name ".DS_Store" \( \
+            -iname "*.mp4" -o -iname "*.mov" -o -iname "*.avi" -o \
+            -iname "*.mkv" -o -iname "*.webm" -o -iname "*.m4v" \) | sort)
+    else
+        # Sort by modification time (oldest first = chronological)
+        # Exclude macOS metadata files (._*)
+        temp_file=$(mktemp)
+
+        # Get all video files with their modification times
+        while IFS= read -r file; do
+            if [[ -n "$file" ]]; then
+                mtime=$(stat -f "%m" "$file" 2>/dev/null)
+                echo "${mtime}|${file}" >> "$temp_file"
+            fi
+        done < <(find "$folder" -maxdepth 1 -type f \
+            ! -name "._*" ! -name ".DS_Store" \( \
+            -iname "*.mp4" -o -iname "*.mov" -o -iname "*.avi" -o \
+            -iname "*.mkv" -o -iname "*.webm" -o -iname "*.m4v" \))
+
+        # Sort by modification time and extract filenames
+        while IFS='|' read -r mtime file; do
+            [[ -n "$file" ]] && videos+=("$file")
+        done < <(sort -n "$temp_file")
+
+        rm -f "$temp_file"
+    fi
+
+    if [[ ${#videos[@]} -eq 0 ]]; then
+        log_error "No video files found in $folder"
+    fi
+
+    printf '%s\n' "${videos[@]}"
+}
+
+# Get video duration using ffprobe
+get_duration() {
+    ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$1" 2>/dev/null
+}
+
+# Process videos
+process_videos() {
+    local videos=("$@")
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    local concat_list="$temp_dir/concat_list.txt"
+    local total=${#videos[@]}
+    local processed=0
+    local total_original_duration=0
+
+    log_info "Found $total video(s) to process"
+    log_info "Speed factor: ${SPEED_FACTOR}x"
+    log_info "Output file: $OUTPUT_FILE"
+    log_info "Using hardware acceleration (VideoToolbox)"
+    echo ""
+
+    # Calculate PTS factor (inverse of speed for video)
+    local pts_factor
+    pts_factor=$(echo "scale=6; 1 / $SPEED_FACTOR" | bc)
+
+    # Process each video
+    for video in "${videos[@]}"; do
+        ((processed++))
+        local basename
+        basename=$(basename "$video")
+        local temp_output="$temp_dir/processed_$(printf "%04d" $processed).mp4"
+
+        # Get original duration
+        local duration
+        duration=$(get_duration "$video")
+        if [[ -n "$duration" ]]; then
+            total_original_duration=$(echo "$total_original_duration + $duration" | bc)
+        fi
+
+        echo -e "${BLUE}[$processed/$total]${NC} Processing: $basename"
+
+        local ffmpeg_opts="-y"
+        if [[ "$VERBOSE" != true ]]; then
+            ffmpeg_opts="$ffmpeg_opts -loglevel error"
+        fi
+
+        # Calculate target fps for speedup (output_fps / speed_factor)
+        # At 100x with 24fps output, we need ~0.24 fps from input
+        local target_fps
+        target_fps=$(echo "scale=4; 24 / $SPEED_FACTOR" | bc)
+
+        # Apply speed change using fps filter (most efficient method)
+        # - fps filter drops frames early in pipeline
+        # - Hardware encoding for output
+        # - No audio for timelapse
+        if ! ffmpeg $ffmpeg_opts \
+            -hwaccel videotoolbox \
+            -i "$video" \
+            -vf "fps=${target_fps},setpts=N/24/TB" \
+            -c:v h264_videotoolbox -b:v 8M \
+            -an \
+            -r 24 \
+            "$temp_output" 2>&1; then
+
+            # Fallback to software encoding if hardware fails
+            log_warn "Hardware encoding failed, falling back to software..."
+            if ! ffmpeg $ffmpeg_opts -i "$video" \
+                -vf "fps=${target_fps},setpts=N/24/TB" \
+                -c:v libx264 -preset ultrafast -crf 23 \
+                -an \
+                -r 24 \
+                "$temp_output" 2>&1; then
+                log_error "Failed to process: $video"
+            fi
+        fi
+
+        echo "file '$temp_output'" >> "$concat_list"
+    done
+
+    echo ""
+    log_info "Concatenating videos..."
+
+    local ffmpeg_opts="-y"
+    if [[ "$VERBOSE" != true ]]; then
+        ffmpeg_opts="$ffmpeg_opts -loglevel error"
+    fi
+
+    # Concatenate all processed videos
+    if ! ffmpeg $ffmpeg_opts -f concat -safe 0 -i "$concat_list" \
+        -c copy "$OUTPUT_FILE" 2>&1; then
+        log_error "Failed to concatenate videos"
+    fi
+
+    # Calculate final duration
+    local final_duration
+    final_duration=$(get_duration "$OUTPUT_FILE")
+
+    # Cleanup
+    if [[ "$KEEP_TEMP" != true ]]; then
+        rm -rf "$temp_dir"
+    else
+        log_info "Temporary files kept at: $temp_dir"
+    fi
+
+    echo ""
+    log_success "Video processing complete!"
+    echo ""
+    echo -e "  ${BLUE}Videos processed:${NC}    $total"
+    if [[ -n "$total_original_duration" ]] && [[ "$total_original_duration" != "0" ]]; then
+        local orig_formatted
+        local final_formatted
+        orig_formatted=$(printf '%02d:%02d:%02d' $((${total_original_duration%.*}/3600)) $((${total_original_duration%.*}%3600/60)) $((${total_original_duration%.*}%60)))
+        if [[ -n "$final_duration" ]]; then
+            final_formatted=$(printf '%02d:%02d:%02d' $((${final_duration%.*}/3600)) $((${final_duration%.*}%3600/60)) $((${final_duration%.*}%60)))
+            echo -e "  ${BLUE}Original duration:${NC}   $orig_formatted"
+            echo -e "  ${BLUE}Final duration:${NC}      $final_formatted"
+        fi
+    fi
+    echo -e "  ${BLUE}Speed factor:${NC}        ${SPEED_FACTOR}x"
+    echo -e "  ${BLUE}Output file:${NC}         $OUTPUT_FILE"
+
+    local file_size
+    file_size=$(du -h "$OUTPUT_FILE" | cut -f1)
+    echo -e "  ${BLUE}File size:${NC}           $file_size"
+}
+
+# Main
+main() {
+    check_dependencies
+    parse_args "$@"
+
+    echo ""
+    echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${BLUE}                     video-stitch                          ${NC}"
+    echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+    echo ""
+
+    # Find and sort videos
+    local videos=()
+    while IFS= read -r video; do
+        [[ -n "$video" ]] && videos+=("$video")
+    done < <(find_videos "$INPUT_FOLDER")
+
+    # Show video order
+    log_info "Processing order:"
+    local i=1
+    for video in "${videos[@]}"; do
+        echo "  $i. $(basename "$video")"
+        ((i++))
+    done
+    echo ""
+
+    # Process videos
+    process_videos "${videos[@]}"
+}
+
+main "$@"
