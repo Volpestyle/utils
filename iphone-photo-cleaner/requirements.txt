@@ -1,0 +1,9 @@
+# iPhone Photo Cleaner - Retro Edition
+# Install with: pip install -r requirements.txt
+
+# Core dependencies
+pymobiledevice3>=2.0.0    # iPhone USB communication
+Pillow>=9.0.0             # Image processing
+
+# Optional but recommended - enables HEIC thumbnail previews
+pillow-heif>=0.10.0       # HEIC/HEIF image support
